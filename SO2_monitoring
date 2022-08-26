@@ -1,0 +1,121 @@
+var geometry = /* color: #23cba7 */ee.Geometry.MultiPoint();
+//Creado por/Created by: Jonathan Panimboza
+//Consultas/Inquiries: jonathan.g.ej@gmail.com
+//Etiquetas/Labels
+var Etiquetas = {
+  titulo:['Densidad de SO2 a 15km de altura [mol/m^2]','SO2 vertical column density at 15km [mol/m^2]'],
+  sensor:['Sensor: Sentinel-5P-TROPOMI','Sensor:Sentinel-5P-TROPOMI'],
+  aoi: ['Dibujar área de interés','Draw your area of interest'],
+  celda: ['Tamaño de celda: 5km','Cell size: 5km']
+};
+//Seleccion de idioma/Language selection
+var sel_idioma = ui.Select({
+  items: ['Español','English'],
+  value: 'English',
+  onChange: function(){
+    var idioma = det_idioma();
+    titulo_l.setValue(Etiquetas.titulo[idioma]);
+    sensor_l.setValue(Etiquetas.sensor[idioma]);
+    aoi_l.setValue(Etiquetas.aoi[idioma]);
+  }
+});
+//Funcion para determinar idioma
+var det_idioma = function(){ 
+  var x;
+  if (sel_idioma.getValue()=='English')
+  {x = 1}
+  else if (sel_idioma.getValue()=='Español')
+  {x = 0}
+  return x;
+};
+//Aplicar funcion de seleccion
+var idioma = det_idioma();
+//variables para etiquetas
+var titulo_l=ui.Label(Etiquetas.titulo[idioma],{fontWeight: 'bold'});
+var sensor_l=ui.Label(Etiquetas.sensor[idioma]);
+var cell_s=ui.Label(Etiquetas.celda[idioma]);
+var aoi_l=ui.Label(Etiquetas.aoi[idioma]);
+//simbolo de rectangulo
+var symbol = {
+  rectangle: '⬛',
+};
+//Eliminar las herramientas de dibujo
+var drawingTools = Map.drawingTools();
+drawingTools.setShown(false);
+//Limpiar geometrias pre-cargadas
+function clearGeometry() {
+  var layers = drawingTools.layers();
+  layers.get(0).geometries().remove(layers.get(0).geometries().get(0));
+}
+clearGeometry();
+//funcion para crear geometrias
+function drawRectangle() {
+  clearGeometry();
+  drawingTools.setShape('rectangle');
+  drawingTools.draw();
+}
+//Boton para dibujar el area de interes
+var rect=ui.Button({
+      label:symbol.rectangle+ ' AOI',
+      onClick: drawRectangle,
+      style: {
+        stretch: 'horizontal',
+        width:'200px',
+        fontSize: '10px',
+        whiteSpace:'nowrap', 
+        //margin: '0px 0px 0px 15px'
+        }
+});
+var panel=ui.Panel();
+panel.style().set({
+  width: '300px',
+});
+var panel_R=ui.Panel();
+panel_R.style().set({
+  width: '300px',
+});
+var panel_L=ui.Panel();
+panel_L.style().set({
+  width: '300px',
+});
+ui.root.insert(0,panel);
+var visArgs = {
+  min: 0,
+  max: 0.005,
+  palette: ['blue', 'purple', 'cyan', 'green', 'yellow', 'red']
+};
+var showdate=ui.DateSlider({
+  start: '2018-01-01', 
+  end:ee.Date(Date.now()).advance(-1,'day'), 
+  style: {width: '270px'},
+  onChange: function(){
+    var aoi = drawingTools.layers().get(0).getEeObject();
+    panel_R.clear();
+    panel_L.clear();
+    Map.clear();
+    var date_1=ee.Date(ee.List(showdate.getValue()).get(0));
+    var s5pcolSO2=ee.ImageCollection("COPERNICUS/S5P/NRTI/L3_SO2")
+      .filterBounds(aoi).filterDate(date_1,date_1.advance(1,'day'));
+    Map.addLayer(s5pcolSO2.mean().clip(aoi),
+      {bands:['SO2_column_number_density_15km'],min:0,max:0.005,
+      palette:visArgs.palette});
+    var imgvar=s5pcolSO2.mean().set('date',date_1);
+    var date=ee.Date(imgvar.get('date')).format('dd-MM-yyyy');
+    var imginfo=date.getInfo();
+    var lk=imgvar.select('SO2_column_number_density_15km').
+      getDownloadURL({name: imginfo,scale: 5000, region: aoi });
+    panel_L.add(ui.Label({
+      value: imginfo,
+      targetUrl: lk,
+    }));
+  }
+});
+panel.add(sel_idioma);
+panel.add(titulo_l);
+panel.add(sensor_l);
+panel.add(cell_s);
+panel.add(aoi_l);
+panel.add(rect);
+panel.add(panel_R);
+panel.add(showdate);
+panel.add(panel_L);
